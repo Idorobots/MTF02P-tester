@@ -1,0 +1,20 @@
+{
+  "name": "mtf02p-tester",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Browser tester for the MicoAir MTF-02P optical flow + ToF sensor over WebSerial (Micolink protocol)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "sanity": "esbuild scripts/parser-sanity.ts --bundle --format=esm --platform=node --outfile=node_modules/.cache/parser-sanity.mjs --log-level=error && node node_modules/.cache/parser-sanity.mjs"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vite": "^6.3.0"
+  }
+}

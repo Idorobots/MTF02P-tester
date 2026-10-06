@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MTF-02P Tester</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0d13'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%2322d3ee' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2322d3ee'/%3E%3C/svg%3E" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div class="brand-text">
+          <h1>MTF-02P Tester</h1>
+          <p>Optical flow + 6 m ToF &middot; Micolink &middot; 115200 8N1 &middot; 50 Hz</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div id="statusPill" class="pill pill-off">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="statusText">Disconnected</span>
+        </div>
+        <button id="btnConnect" class="btn btn-primary">Connect device</button>
+        <button id="btnConnectAll" class="btn" title="Connect to any serial port, including built-in ones (ttyS*)">All ports&hellip;</button>
+        <button id="btnSim" class="btn">Simulate</button>
+        <button id="btnPause" class="btn" disabled>Pause</button>
+        <button id="btnExport" class="btn" disabled>Export CSV</button>
+      </div>
+    </header>
+
+    <div id="compatBanner" class="banner hidden"></div>
+
+    <main class="layout">
+      <section class="card">
+        <div class="card-head">
+          <h2>Live telemetry</h2>
+          <span class="badge" id="roSeqBadge">seq &mdash;</span>
+        </div>
+        <div class="readouts">
+          <div class="readout hero">
+            <span class="label">Altitude (ToF)</span>
+            <span class="value"><b id="roAlt">&mdash;</b><span class="unit">m</span></span>
+            <span class="sub" id="roAltSub">no reading</span>
+          </div>
+          <div class="readout-duo">
+            <div class="readout">
+              <span class="label">Velocity X</span>
+              <span class="value"><b id="roVelX">&mdash;</b><span class="unit">cm/s</span></span>
+              <span class="sub" id="roVelXSub">raw &mdash; @ 1 m</span>
+            </div>
+            <div class="readout">
+              <span class="label">Velocity Y</span>
+              <span class="value"><b id="roVelY">&mdash;</b><span class="unit">cm/s</span></span>
+              <span class="sub" id="roVelYSub">raw &mdash; @ 1 m</span>
+            </div>
+          </div>
+          <div class="readout-duo">
+            <div class="readout">
+              <span class="label">Offset X</span>
+              <span class="value"><b id="roPosX">&mdash;</b><span class="unit">m</span></span>
+              <span class="sub">integrated</span>
+            </div>
+            <div class="readout">
+              <span class="label">Offset Y</span>
+              <span class="value"><b id="roPosY">&mdash;</b><span class="unit">m</span></span>
+              <span class="sub">integrated</span>
+            </div>
+          </div>
+          <div class="quality">
+            <div class="quality-head">
+              <span class="label">Flow quality</span>
+              <span id="qualityText">&mdash;</span>
+            </div>
+            <div class="bar"><div class="fill" id="qualityFill"></div></div>
+            <div class="badges">
+              <span class="badge" id="roFlowStatus">flow_status &mdash;</span>
+              <span class="badge" id="roDistStatus">dis_status &mdash;</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Device health</h2>
+          <span id="healthBadge" class="badge badge-off">OFFLINE</span>
+        </div>
+        <dl class="health-grid">
+          <div><dt>Frame rate</dt><dd><span id="hz">&mdash;</span> fps</dd></div>
+          <div><dt>Frames decoded</dt><dd id="frames">0</dd></div>
+          <div><dt>Sequence gaps</dt><dd id="seqGaps">0</dd></div>
+          <div><dt>Checksum errors</dt><dd id="checksumErr">0</dd></div>
+          <div><dt>Garbage bytes</dt><dd id="garbage">0</dd></div>
+          <div><dt>Last frame</dt><dd id="lastAge">&mdash;</dd></div>
+          <div><dt>Session</dt><dd id="uptime">&mdash;</dd></div>
+          <div><dt>Protocol</dt><dd id="healthProto" class="mono">&mdash;</dd></div>
+        </dl>
+        <p class="hint" id="healthHint">Connect the sensor over USB-TTL, or press Simulate to exercise the app without hardware.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Motion trail</h2>
+          <span class="hint-inline" id="posScale"></span>
+          <button id="btnResetTrail" class="btn btn-mini" disabled>Reset</button>
+        </div>
+        <div class="pos-wrap"><canvas id="posCanvas"></canvas></div>
+        <p class="card-note">Integrated from flow velocity &times; height &mdash; relative movement, drifts over time.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Altitude</h2><span class="hint-inline">last 60 s</span></div>
+        <div class="chart-wrap"><canvas id="chartAlt"></canvas></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Optical flow velocity</h2><span class="hint-inline">last 60 s</span></div>
+        <div class="chart-wrap"><canvas id="chartFlow"></canvas></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Signal quality</h2><span class="hint-inline">last 60 s</span></div>
+        <div class="chart-wrap"><canvas id="chartQuality"></canvas></div>
+      </section>
+
+      <details class="card card-wide" id="diagCard">
+        <summary>
+          <h2>Raw stream diagnostics</h2>
+          <span class="chevron" aria-hidden="true"></span>
+          <span class="hint-inline" id="probeStatus">checksum probe: idle</span>
+          <button id="btnDiag" class="btn btn-mini" disabled>Export diagnostics</button>
+        </summary>
+        <div class="diag-body">
+          <div class="diag-chips">
+            <span class="chip">Total bytes<b id="diagBytes">0</b></span>
+            <span class="chip">Byte rate<b id="diagRate">0 B/s</b></span>
+            <span class="chip">0xEF Micolink<b id="diagEf">0</b></span>
+            <span class="chip">0xFD MAVLink v2<b id="diagFd">0</b></span>
+            <span class="chip">0xFE MAVLink v1<b id="diagFe">0</b></span>
+            <span class="chip">$ MSP v2<b id="diagDollar">0</b></span>
+            <span class="chip">0x59 TFmini<b id="diagTf">0</b></span>
+          </div>
+          <pre class="hexdump" id="hexDump">—</pre>
+        </div>
+      </details>
+    </main>
+
+    <footer>
+      <p><strong>Wiring:</strong> 5 V and GND from a USB-TTL adapter &middot; module TX &rarr; adapter RX &middot; module RX &rarr; adapter TX (3.3 V LVTTL logic, module powered at 5 V).</p>
+      <p><strong>Micolink:</strong> 0xEF header &middot; msg 0x51 RANGE_SENSOR &middot; checksum = byte sum. Select Micolink on the module via its solder pads or MicoAssistant; needs Chrome/Edge/Opera on desktop.</p>
+    </footer>
+  </body>
+</html>
