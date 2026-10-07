@@ -18,12 +18,43 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #35415a;
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 html,
 body {
   margin: 0;
   padding: 0;
+}
+
+/* reserve the scrollbar gutter even when the page doesn't scroll, so
+   content never shifts sideways when the scrollbar appears */
+html {
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -322,7 +353,7 @@ b {
 }
 
 .readout.hero .value b {
-  font-size: 34px;
+  font-size: clamp(26px, 4.5vh, 34px);
   color: var(--accent);
 }
 
@@ -467,8 +498,11 @@ b {
 
 /* ---------- diagnostics ---------- */
 
-.card-wide {
-  grid-column: 1 / -1;
+.diag-outer {
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 22px 4px;
 }
 
 details.card {
@@ -580,97 +614,10 @@ details.card summary .hint-inline {
   display: block;
 }
 
-/* ---------- footer ---------- */
-
-footer {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 6px 22px 28px;
-  color: var(--faint);
-  font-size: 12px;
-}
-
-footer p {
-  margin: 4px 0;
-}
-
-footer strong {
-  color: var(--muted);
-}
-
 /* ---------- responsive ---------- */
 
 @media (max-width: 1080px) {
   .layout {
     grid-template-columns: 1fr;
-  }
-}
-
-/* ---------- desktop: fit everything in the viewport, no scrollbar ---------- */
-
-@media (min-width: 1081px) {
-  html,
-  body {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  body {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .topbar {
-    position: static;
-    flex: none;
-    padding: 10px 22px;
-  }
-
-  .banner {
-    flex: none;
-  }
-
-  .layout {
-    flex: 1 1 auto;
-    min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr);
-    padding: 14px 22px 10px;
-  }
-
-  .card {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    padding: 12px 16px 14px;
-  }
-
-  .card-head {
-    flex: none;
-    margin-bottom: 8px;
-  }
-
-  .chart-wrap,
-  .pos-wrap {
-    flex: 1 1 auto;
-    height: auto;
-    min-height: 120px;
-  }
-
-  .card-note {
-    flex: none;
-  }
-
-  footer {
-    flex: none;
-    padding: 0 22px 10px;
-  }
-
-  footer p {
-    display: inline;
-    margin: 0 20px 0 0;
-  }
-
-  .readout.hero .value b {
-    font-size: clamp(26px, 4.5vh, 34px);
   }
 }

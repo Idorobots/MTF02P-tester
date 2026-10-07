@@ -3,6 +3,8 @@ import type { MicolinkFrame } from './protocol/types.ts';
 import { SerialSource } from './serial/connection.ts';
 import { BRIDGE_FILTERS } from './serial/connection.ts';
 import type { PortFilter, SerialPortInfoLite } from './serial/connection.ts';
+import { BleSource } from './serial/ble.ts';
+import type { BleInfo } from './serial/ble.ts';
 import { DeviceSimSource } from './sim/deviceSim.ts';
 import { StreamSniffer } from './protocol/sniffer.ts';
 import { ProtocolGate } from './protocol/detector.ts';
@@ -19,6 +21,7 @@ const dom = {
   statusText: el<HTMLSpanElement>('statusText'),
   btnConnect: el<HTMLButtonElement>('btnConnect'),
   btnConnectAll: el<HTMLButtonElement>('btnConnectAll'),
+  btnBle: el<HTMLButtonElement>('btnBle'),
   btnSim: el<HTMLButtonElement>('btnSim'),
   btnPause: el<HTMLButtonElement>('btnPause'),
   btnExport: el<HTMLButtonElement>('btnExport'),
@@ -83,7 +86,7 @@ interface LogRow {
 
 const LOG_CAP = 200_000;
 
-let source: 'serial' | 'sim' | null = null;
+let source: 'serial' | 'ble' | 'sim' | null = null;
 let paused = false;
 const gate = new ProtocolGate();
 let sessionStart = performance.now();
@@ -131,6 +134,16 @@ const sim = new DeviceSimSource({
     gate.feed(data);
   },
   onOpen: () => onSourceOpen('sim', null),
+  onClose: (err) => onSourceClose(err),
+});
+
+const ble = new BleSource({
+  onData: (data) => {
+    sniffer.feed(data);
+    byteTimes.push(performance.now());
+    gate.feed(data);
+  },
+  onOpen: (info) => onSourceOpen('ble', info),
   onClose: (err) => onSourceClose(err),
 });
 
@@ -230,12 +243,23 @@ function hex4(v: number | undefined): string {
   return v === undefined ? '—' : v.toString(16).toUpperCase().padStart(4, '0');
 }
 
-function onSourceOpen(kind: 'serial' | 'sim', info: SerialPortInfoLite | null): void {
+function onSourceOpen(kind: 'serial' | 'ble' | 'sim', info: SerialPortInfoLite | BleInfo | null): void {
   source = kind;
   resetSession();
   hideBanner();
   if (kind === 'serial') {
-    setPill('pill-live', info?.usbVendorId !== undefined ? `Connected · VID ${hex4(info.usbVendorId)} PID ${hex4(info.usbProductId)}` : 'Connected');
+    const sInfo = info as SerialPortInfoLite | null;
+    const label = sInfo?.bluetoothServiceClassId !== undefined
+      ? 'Connected · Bluetooth SPP'
+      : sInfo?.usbVendorId !== undefined
+        ? `Connected · VID ${hex4(sInfo.usbVendorId)} PID ${hex4(sInfo.usbProductId)}`
+        : 'Connected';
+    setPill('pill-live', label);
+    dom.btnConnect.textContent = 'Disconnect';
+    dom.btnSim.disabled = true;
+  } else if (kind === 'ble') {
+    const bInfo = info as BleInfo;
+    setPill('pill-live', bInfo.deviceName ? `Connected · BLE ${bInfo.deviceName}` : 'Connected · BLE');
     dom.btnConnect.textContent = 'Disconnect';
     dom.btnSim.disabled = true;
   } else {
@@ -243,6 +267,7 @@ function onSourceOpen(kind: 'serial' | 'sim', info: SerialPortInfoLite | null): 
     dom.btnConnect.disabled = true;
   }
   dom.btnConnectAll.disabled = true;
+  dom.btnBle.disabled = true;
   dom.btnSim.textContent = kind === 'sim' ? 'Stop simulator' : 'Simulate';
   dom.btnPause.disabled = false;
   dom.btnResetTrail.disabled = false;
@@ -256,6 +281,7 @@ function onSourceClose(err?: string): void {
   dom.btnConnect.textContent = 'Connect device';
   dom.btnConnect.disabled = !('serial' in navigator);
   dom.btnConnectAll.disabled = !('serial' in navigator);
+  dom.btnBle.disabled = !bleAvailable();
   dom.btnSim.disabled = false;
   dom.btnSim.textContent = 'Simulate';
   dom.btnPause.disabled = true;
@@ -267,7 +293,11 @@ function onSourceClose(err?: string): void {
   dom.healthBadge.textContent = 'OFFLINE';
   dom.healthHint.textContent = err
     ? `Connection lost: ${err}`
-    : 'Connect the sensor over USB-TTL, or press Simulate to exercise the app without hardware.';
+    : 'Connect the sensor over USB-TTL or BLE, or press Simulate to exercise the app without hardware.';
+}
+
+function bleAvailable(): boolean {
+  return 'bluetooth' in navigator && !!navigator.bluetooth;
 }
 
 function showBanner(text: string): void {
@@ -427,6 +457,10 @@ dom.btnConnect.addEventListener('click', async () => {
     await serial.disconnect();
     return;
   }
+  if (source === 'ble') {
+    await ble.disconnect();
+    return;
+  }
   if (!('serial' in navigator)) {
     showBanner('Web Serial API is not available in this browser. Use Chrome, Edge or Opera on desktop. The simulator still works.');
     return;
@@ -437,6 +471,27 @@ dom.btnConnect.addEventListener('click', async () => {
 
 dom.btnConnectAll.addEventListener('click', () => {
   void tryConnect();
+});
+
+dom.btnBle.addEventListener('click', async () => {
+  if (source !== null) return;
+  if (!bleAvailable()) {
+    showBanner('Web Bluetooth is not available in this browser (needs Chrome/Edge desktop or Android). USB-serial and the simulator still work.');
+    return;
+  }
+  setPill('pill-connecting', 'Connecting…');
+  try {
+    await ble.connect();
+  } catch (err) {
+    setPill('pill-off', 'Disconnected');
+    const name = err instanceof DOMException ? err.name : '';
+    if (name === 'NotFoundError') {
+      showBanner('No device selected.');
+    } else {
+      const msg = err instanceof Error ? err.message : String(err);
+      showBanner(`Could not connect: ${msg}`);
+    }
+  }
 });
 
 dom.btnSim.addEventListener('click', () => {
@@ -553,4 +608,7 @@ if (!('serial' in navigator)) {
   showBanner('Web Serial API is not available in this browser. Use Chrome, Edge or Opera on desktop to connect real hardware — the simulator works everywhere.');
   dom.btnConnect.disabled = true;
   dom.btnConnectAll.disabled = true;
+}
+if (!bleAvailable()) {
+  dom.btnBle.disabled = true;
 }

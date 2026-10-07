@@ -22,6 +22,7 @@
           <span id="statusText">Disconnected</span>
         </div>
         <button id="btnConnect" class="btn btn-primary">Connect device</button>
+        <button id="btnBle" class="btn" title="Connect to a BLE device with a Nordic UART / FFE0 / FFF0 service">BLE&hellip;</button>
         <button id="btnConnectAll" class="btn" title="Connect to any serial port, including built-in ones (ttyS*)">All ports&hellip;</button>
         <button id="btnSim" class="btn">Simulate</button>
         <button id="btnPause" class="btn" disabled>Pause</button>
@@ -124,7 +125,10 @@
         <div class="chart-wrap"><canvas id="chartQuality"></canvas></div>
       </section>
 
-      <details class="card card-wide" id="diagCard">
+    </main>
+
+    <div class="diag-outer">
+      <details class="card diag-card" id="diagCard">
         <summary>
           <h2>Raw stream diagnostics</h2>
           <span class="chevron" aria-hidden="true"></span>
@@ -141,14 +145,9 @@
             <span class="chip">$ MSP v2<b id="diagDollar">0</b></span>
             <span class="chip">0x59 TFmini<b id="diagTf">0</b></span>
           </div>
-          <pre class="hexdump" id="hexDump">—</pre>
+          <pre class="hexdump" id="hexDump">&mdash;</pre>
         </div>
       </details>
-    </main>
-
-    <footer>
-      <p><strong>Wiring:</strong> 5 V and GND from a USB-TTL adapter &middot; module TX &rarr; adapter RX &middot; module RX &rarr; adapter TX (3.3 V LVTTL logic, module powered at 5 V).</p>
-      <p><strong>Micolink:</strong> 0xEF header &middot; msg 0x51 RANGE_SENSOR &middot; checksum = byte sum. Select Micolink on the module via its solder pads or MicoAssistant; needs Chrome/Edge/Opera on desktop.</p>
-    </footer>
+    </div>
   </body>
 </html>

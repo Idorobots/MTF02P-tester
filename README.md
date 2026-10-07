@@ -38,6 +38,13 @@ Then press **Connect device** and pick the adapter's serial port. The port picke
 
 Web Serial needs **Chrome, Edge or Opera on desktop** (localhost or HTTPS). Other browsers can still use the **Simulate** mode.
 
+**Bluetooth serial works too**:
+
+- **Bluetooth Classic SPP**: pair the device in your OS Bluetooth settings, then use **Connect device** (or **All ports…**) — Chrome 117+ lists paired SPP devices alongside USB bridges. Baud rate is ignored over RFCOMM.
+- **BLE** (button **BLE…**): works with BLE-serial bridges exposing a UART-like GATT service — Nordic UART Service (`6e400001…`), the HM-10/AT-09/JDY-class `FFE0/FFE1` service, or JDY-31-class `FFF0/FFF1`. Select the device in the browser picker (no OS pairing needed); there is no baud rate on BLE GATT, and throughput is bounded by the connection interval. Data still flows one way (sensor → app), which is all this sensor needs.
+
+Either way the MTF-02P has no radio of its own: a wireless path requires a serial-to-Bluetooth bridge module wired to the sensor's UART (sensor TX → bridge RXD).
+
 ## Protocol notes
 
 The module supports MAVLink (ArduPilot/PX4), MSP (INAV) and **Micolink**; current-production units **auto-detect the flight controller on power-up**, otherwise select a protocol via the solder pads or [MicoAssistant](https://micoair.com/assistant/). This app supports:

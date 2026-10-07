@@ -6,12 +6,18 @@
 export interface SerialPortInfoLite {
   usbVendorId?: number;
   usbProductId?: number;
+  bluetoothServiceClassId?: string;
 }
 
 export interface PortFilter {
   usbVendorId?: number;
   usbProductId?: number;
+  /** Bluetooth Classic RFCOMM service (SPP = standard serial port profile). */
+  bluetoothServiceClassId?: string;
 }
+
+/** Standardized Bluetooth Classic Serial Port Profile UUID. */
+export const BLUETOOTH_SPP_UUID = '00001101-0000-1000-8000-00805f9b34fb';
 
 export interface SerialCallbacks {
   onData: (data: Uint8Array) => void;
@@ -35,6 +41,8 @@ export const BRIDGE_FILTERS: PortFilter[] = [
   { usbVendorId: 0x303a }, // Espressif native USB
   { usbVendorId: 0x2341 }, // Arduino
   { usbVendorId: 0x0483 }, // STMicroelectronics CDC
+  // Paired Bluetooth Classic SPP devices (e.g. HC-05/JDY-31 bridges) — Chrome 117+
+  { bluetoothServiceClassId: BLUETOOTH_SPP_UUID },
 ];
 
 export class SerialSource {
@@ -52,7 +60,10 @@ export class SerialSource {
   }
 
   async connect(filters?: PortFilter[]): Promise<void> {
-    const port = await navigator.serial.requestPort(filters ? { filters } : {});
+    const options = filters
+      ? { filters, allowedBluetoothServiceClassIds: [BLUETOOTH_SPP_UUID] }
+      : { allowedBluetoothServiceClassIds: [BLUETOOTH_SPP_UUID] };
+    const port = await navigator.serial.requestPort(options);
     await port.open({
       baudRate: MTF02P_BAUD,
       dataBits: 8,

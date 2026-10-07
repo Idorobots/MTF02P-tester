@@ -8,6 +8,8 @@ import { VariantProbe, VARIANTS } from '../src/protocol/probe.ts';
 import { StreamSniffer } from '../src/protocol/sniffer.ts';
 import { MspMeasurementSource, MSP2_SENSOR_RANGEFINDER, MSP2_SENSOR_OPTIC_FLOW } from '../src/protocol/msp.ts';
 import { ProtocolGate } from '../src/protocol/detector.ts';
+import { evaluateHealth } from '../src/ui/health.ts';
+import type { SniffStats } from '../src/protocol/sniffer.ts';
 import type { MicolinkFrame } from '../src/protocol/types.ts';
 
 let failures = 0;
@@ -373,6 +375,97 @@ for (let i = 0; i < 8; i++) {
 }
 check('gate: locks micolink via probe', gateVLocked === 'micolink' && gateV.probe.locked === 'inv-sum');
 check('gate: decodes after variant lock', gateV.measurementCount >= 3 && gateVEvents.every((e) => e.proto === 'micolink'));
+
+// ---------- Health verdicts (device-works-as-expected logic) ----------
+
+function mkFrame(quality: number): MicolinkFrame {
+  return {
+    devId: 1, sysId: 1, msgId: 0x51, seq: 1, timeMs: 0,
+    distanceMm: 900, strength: 200, precision: 2, disStatus: 1,
+    flowVelX: 10, flowVelY: 10, flowQuality: quality, flowStatus: 1,
+    receivedAt: 0, proto: 'micolink',
+  };
+}
+
+const emptySniff: SniffStats = {
+  totalBytes: 0, efHeads: 0, fdHeads: 0, feHeads: 0, dollarHeads: 0, tfHeads: 0,
+};
+
+function healthInput(overrides: Partial<Parameters<typeof evaluateHealth>[0]>): Parameters<typeof evaluateHealth>[0] {
+  return {
+    connected: true,
+    hz: 50,
+    framesTotal: 100,
+    lastAgeMs: 20,
+    checksumErrors: 0,
+    garbageBytes: 0,
+    lastFrame: mkFrame(90),
+    sniff: { totalBytes: 5000, efHeads: 200, fdHeads: 0, feHeads: 0, dollarHeads: 0, tfHeads: 0 },
+    bytesPerSec: 2700,
+    probeVariant: null,
+    locked: 'micolink',
+    ...overrides,
+  };
+}
+
+const v = (input: Parameters<typeof evaluateHealth>[0]) => evaluateHealth(input);
+
+check('health: offline', v(healthInput({ connected: false })).level === 'off' && v(healthInput({ connected: false })).label === 'OFFLINE');
+check('health: no bytes -> NO DATA', v(healthInput({ framesTotal: 0, sniff: emptySniff, bytesPerSec: 0 })).label === 'NO DATA');
+check('health: detecting before lock', v(healthInput({
+  framesTotal: 0,
+  locked: null,
+  sniff: { totalBytes: 3000, efHeads: 5, fdHeads: 2, feHeads: 1, dollarHeads: 1, tfHeads: 1 },
+  bytesPerSec: 500,
+})).label === 'DETECTING');
+check('health: msp locked but no flow frames', v(healthInput({ framesTotal: 0, locked: 'msp' })).label === 'MSP · NO FLOW');
+check('health: micolink locked but no measurements', v(healthInput({ framesTotal: 0, locked: 'micolink' })).label === 'MICOLINK · NO FLOW');
+check('health: mavlink v2 stream flagged', v(healthInput({
+  framesTotal: 0,
+  locked: null,
+  sniff: { totalBytes: 5000, efHeads: 1, fdHeads: 30, feHeads: 0, dollarHeads: 0, tfHeads: 0 },
+  bytesPerSec: 1350,
+})).label === 'MAVLINK v2 DETECTED');
+check('health: mavlink v1 stream flagged', v(healthInput({
+  framesTotal: 0,
+  locked: null,
+  sniff: { totalBytes: 5000, efHeads: 1, fdHeads: 0, feHeads: 30, dollarHeads: 0, tfHeads: 0 },
+  bytesPerSec: 1350,
+})).label === 'MAVLINK v1 DETECTED');
+check('health: tfmini-like stream flagged', v(healthInput({
+  framesTotal: 0,
+  locked: null,
+  sniff: { totalBytes: 5000, efHeads: 1, fdHeads: 0, feHeads: 0, dollarHeads: 0, tfHeads: 30 },
+  bytesPerSec: 1350,
+})).label === 'TFMINI-LIKE STREAM');
+check('health: checksum mismatch detected', v(healthInput({
+  framesTotal: 0,
+  locked: null,
+  checksumErrors: 80,
+  sniff: { totalBytes: 5000, efHeads: 100, fdHeads: 0, feHeads: 0, dollarHeads: 0, tfHeads: 0 },
+  bytesPerSec: 1350,
+})).label === 'CHECKSUM MISMATCH');
+check('health: frame format mismatch detected', v(healthInput({
+  framesTotal: 0,
+  locked: null,
+  checksumErrors: 5,
+  sniff: { totalBytes: 5000, efHeads: 100, fdHeads: 0, feHeads: 0, dollarHeads: 0, tfHeads: 0 },
+  bytesPerSec: 1350,
+})).label === 'FRAME FORMAT MISMATCH');
+check('health: near-silent stream detected', v(healthInput({
+  framesTotal: 0,
+  locked: null,
+  sniff: { totalBytes: 200, efHeads: 1, fdHeads: 0, feHeads: 0, dollarHeads: 0, tfHeads: 0 },
+  bytesPerSec: 10,
+})).label === 'NEAR-SILENT STREAM');
+check('health: streaming ok at 50 fps', v(healthInput({})).level === 'ok' && v(healthInput({})).label === 'STREAMING · OK');
+check('health: streaming ok over msp mentions estimate', v(healthInput({ locked: 'msp' })).hint.includes('estimate'));
+check('health: live below 40 fps still ok', v(healthInput({ hz: 45 })).label === 'STREAMING · OK' && v(healthInput({ hz: 30 })).label === 'LIVE');
+check('health: low frame rate degraded', v(healthInput({ hz: 10 })).level === 'warn' && v(healthInput({ hz: 10 })).label === 'DEGRADED');
+check('health: checksum errors degraded', v(healthInput({ checksumErrors: 5 })).level === 'warn');
+check('health: low flow quality degraded', v(healthInput({ lastFrame: mkFrame(30) })).level === 'warn');
+check('health: stalled stream -> SIGNAL LOST', v(healthInput({ lastAgeMs: 3000 })).level === 'bad' && v(healthInput({ lastAgeMs: 3000 })).label === 'SIGNAL LOST');
+check('health: checksum variant mentioned in hint', v(healthInput({ probeVariant: 'xor' })).hint.includes('"xor"'));
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);
