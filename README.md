@@ -2,6 +2,8 @@
 
 A single-page TypeScript app for testing the **MicoAir MTF-02P** optical flow + ToF rangefinder module in the browser over **Web Serial**, using the vendor's **Micolink** protocol.
 
+![tester](./images/tester.png)
+
 ## What it shows
 
 - **Live telemetry**: altitude (ToF, m), optical flow velocity X/Y (cm/s at real height, raw cm/s @ 1 m), integrated X/Y position offset
